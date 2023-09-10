@@ -141,6 +141,8 @@ int main(int argc, char** argv)
         case SEND_MODE:
             if (address == "0.0.0.0")
                 address = "127.0.0.1";
+            if (optind >= argc)
+                exit_usage(argv[0]);
             send_file(address, port, argv[optind]);
             break;
     };
