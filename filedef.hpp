@@ -10,6 +10,11 @@ namespace woo200
         unsigned int length;
         char* data;
     } PrefixedLengthByteArray;
+
+    typedef struct CommandPacket
+    {
+        char command;
+    } CommandPacket;
     
     class FileHeader
     {
