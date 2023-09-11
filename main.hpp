@@ -1,6 +1,6 @@
 #pragma once
 
-#include "libs/packets/base_sockets.hpp"
+#include "base_sockets.hpp"
 #include "filedef.hpp"
 
 #include <iostream>

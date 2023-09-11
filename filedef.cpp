@@ -50,8 +50,8 @@ namespace woo200
     {
         return std::string(&this->command, 1);
     }
-    void PCommand::read_i_data(ClientSocket &socket)
+    int PCommand::read_i_data(ClientSocket &socket)
     {
-        socket.recv(&this->command, 1);
+        return socket.recv(&this->command, 1);
     }
 } 

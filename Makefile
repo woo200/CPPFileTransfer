@@ -1,7 +1,7 @@
 # Variables
 CXX = g++
 CXXFLAGS = -std=c++11 -Wall -Wextra -O2
-LDFLAGS =
+LDFLAGS = -lpackets
 OBJ_DIR = obj
 BIN = file_transfer
 SRC = $(wildcard *.cpp)

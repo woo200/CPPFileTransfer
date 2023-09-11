@@ -1,15 +1,12 @@
 #pragma once
 
 #include <string.h>  
-#include "libs/packets/base_packet.hpp"
+#include "base_packet.hpp"
 
 namespace woo200 
 {   
     class PFileHeader : public Packet
     {
-        const char* filename;
-        unsigned long size;
-    public:
         private:
             PString* filename;
             PUlong* size;
@@ -28,7 +25,7 @@ namespace woo200
         private:
             char command;
 
-            void read_i_data(ClientSocket &socket);
+            int read_i_data(ClientSocket &socket);
             std::string get_i_data();
         public:
             PCommand(char command = 0);
