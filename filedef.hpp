@@ -1,31 +1,39 @@
 #pragma once
 
 #include <string.h>  
-#include "client_socket.hpp"
+#include "libs/packets/base_packet.hpp"
 
 namespace woo200 
-{
-    typedef struct PrefixedLengthByteArray
-    {
-        unsigned int length;
-        char* data;
-    } PrefixedLengthByteArray;
-
-    typedef struct CommandPacket
-    {
-        char command;
-    } CommandPacket;
-    
-    class FileHeader
+{   
+    class PFileHeader : public Packet
     {
         const char* filename;
         unsigned long size;
     public:
-        FileHeader(const char* filename, unsigned long size);
-        FileHeader(woo200::ClientSocket* sock);
-        PrefixedLengthByteArray to_byte_array();
+        private:
+            PString* filename;
+            PUlong* size;
+        public:
+            PFileHeader(std::string filename = "", unsigned long size = 0);
+            ~PFileHeader();
 
-        const char* get_filename();
-        unsigned long get_size();
+            std::string get_filename();
+            unsigned long get_filesize();
+            void set_filename(std::string filename);
+            void set_filesize(unsigned long size);
+    };
+
+    class PCommand : public Packet
+    {
+        private:
+            char command;
+
+            void read_i_data(ClientSocket &socket);
+            std::string get_i_data();
+        public:
+            PCommand(char command = 0);
+
+            char get_command();
+            void set_command(char command);
     };
 }

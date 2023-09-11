@@ -2,47 +2,56 @@
 
 namespace woo200
 {
-    FileHeader::FileHeader(const char* filename, unsigned long size)
+    PFileHeader::PFileHeader(std::string filename, unsigned long size)
     {
-        this->filename = filename;
-        this->size = size;
-    }
-    FileHeader::FileHeader(woo200::ClientSocket* sock)
-    {
-        unsigned short filename_len;
-        sock->recv((char*) &filename_len, sizeof(unsigned short)), MSG_WAITALL;
-        char* filename = new char[filename_len];
-        sock->recv(filename, filename_len, MSG_WAITALL);
-        unsigned long size;
-        sock->recv((char*) &size, sizeof(unsigned long), MSG_WAITALL);
+        this->filename = new PString(filename);
+        this->size = new PUlong(size);
 
-        char* filename_with_null = new char[filename_len + 1];
-        memcpy(filename_with_null, filename, filename_len);
-        filename_with_null[filename_len] = '\0';
+        this->add_field(this->filename);
+        this->add_field(this->size);
+    }
+    PFileHeader::~PFileHeader()
+    {
+        delete this->filename;
+        delete this->size;
+    }
+    
+    std::string PFileHeader::get_filename()
+    {
+        return this->filename->get_value();
+    }
+    unsigned long PFileHeader::get_filesize()
+    {
+        return this->size->get_value();
+    }
+    void PFileHeader::set_filename(std::string filename)
+    {
+        this->filename->set_value(filename);
+    }
+    void PFileHeader::set_filesize(unsigned long size)
+    {
+        this->size->set_value(size);
+    }
 
-        this->filename = filename_with_null;
-        this->size = size;
-    }
-    PrefixedLengthByteArray FileHeader::to_byte_array()
+    PCommand::PCommand(char command)
     {
-        unsigned short filename_len = strlen(this->filename);
-        // filename_len, filename, size
-        unsigned int total_len = sizeof(short) + filename_len + sizeof(unsigned long);
-
-        char* data = new char[total_len];
-        memcpy(data, &filename_len, sizeof(unsigned short));
-        memcpy(data + sizeof(unsigned short), this->filename, filename_len);
-        memcpy(data + sizeof(unsigned short) + filename_len, &this->size, sizeof(unsigned long));
-        
-        PrefixedLengthByteArray ret = {total_len, data};
-        return ret;
+        this->command = command;
     }
-    const char* FileHeader::get_filename()
+    
+    char PCommand::get_command()
     {
-        return this->filename;
+        return this->command;
     }
-    unsigned long FileHeader::get_size()
+    void PCommand::set_command(char command)
     {
-        return this->size;
+        this->command = command;
+    }
+    std::string PCommand::get_i_data()
+    {
+        return std::string(&this->command, 1);
+    }
+    void PCommand::read_i_data(ClientSocket &socket)
+    {
+        socket.recv(&this->command, 1);
     }
 } 

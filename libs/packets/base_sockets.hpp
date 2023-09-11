@@ -21,9 +21,23 @@ namespace woo200 {
 
         int connect(int port, const char* ip);
         int connect(int port, sockaddr_in* addr);
-        int send(const char* msg, int len);
+        int send(void* msg, int len);
+        int recv(void* buf, int len, int flags=0);
+        void close();
+    };
+    
+    class ServerSocket {
+        struct sockaddr_in bind_addr;
+        int sock;
+    public:
+        ServerSocket();
+        ~ServerSocket();
 
-        int recv(char* buf, int len, int flags=0);
+        int bind(const char* address, int port);
+        int bind(sockaddr_in* addr);
+        int listen(int backlog);
+        ClientSocket* accept();
+
         void close();
     };
 }

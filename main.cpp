@@ -83,14 +83,17 @@ void create_dirs(std::string file_path)
 
 int receive_file(woo200::ClientSocket &client)
 {
-    woo200::FileHeader header(&client);
-    const char* filename = header.get_filename();
-    unsigned long size = header.get_size();
+    woo200::PFileHeader header;
+    header.read_from_socket(client);
+
+    std::string filename = header.get_filename();
+    unsigned long size = header.get_filesize();
+
     printf("Receiving file %s (%lu bytes)\n", filename, size);
 
     create_dirs(filename); // Create directories if they don't exist
 
-    FILE* fp = fopen(filename, "w");
+    FILE* fp = fopen(filename.c_str(), "w");
     if (fp == NULL) {
         fprintf(stderr, "Failed to open file %s\n", filename);
         send_command(client, 'e'); // Error
@@ -172,9 +175,8 @@ int send_file(std::string file_path, woo200::ClientSocket &sock, int deepness)
 
     // Send file header packet
     std::string basename = base_name(file_path, deepness);
-    woo200::FileHeader header(basename.c_str(), file_len);
-    woo200::PrefixedLengthByteArray data = header.to_byte_array();
-    sock.send(data.data, data.length);
+    woo200::PFileHeader header(basename, file_len);
+    header.send_to_socket(sock);
 
     // Wait for server to be ready
     char cmd = recv_command(sock);
