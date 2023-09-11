@@ -42,9 +42,38 @@ void start_receive(std::string address, int port)
     sock.close();
 }
 
-std::string base_name(std::string const & path)
+int count(std::string str, char c)
 {
-  return path.substr(path.find_last_of("/") + 1);
+    int count = 0;
+    for (char ch : str) {
+        if (ch == c)
+            count++;
+    }
+    return count;
+}
+
+std::string base_name(std::string path, int deepness = 0)
+{
+    bool has_ending_slash = path[path.length()-1] == '/';
+    if (!has_ending_slash)
+        path += "/";
+
+    int num_slashes = count(path, '/') - 1;
+    std::istringstream f(path);
+    std::string s, basename;
+    int i = 0;
+
+    while (getline(f, s, '/')) {
+        if (num_slashes-i <= deepness) {
+            basename += s + "/";
+        }
+        i++;
+    }
+
+    if (!has_ending_slash)
+        return basename.substr(0, basename.length()-1);
+
+    return basename;
 }
 
 void send_file(std::string address, int port, const char* filename)
