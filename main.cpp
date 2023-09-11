@@ -2,25 +2,43 @@
 
 #define CHUNK_SIZE 128000
 
+void send_command(woo200::ClientSocket &sock, char command)
+{
+    woo200::CommandPacket cmd = { command };
+    sock.send((char*) &cmd, sizeof(cmd));
+}
+
+char recv_command(woo200::ClientSocket &sock)
+{
+    woo200::CommandPacket cmd;
+    if (sock.recv((char*) &cmd, sizeof(cmd), MSG_WAITALL) <= 0) {
+        fprintf(stderr, "Connection closed abruptly!");
+        exit(EXIT_FAILURE);
+    }
+    return cmd.command;
+}
+
 // ################################
 // ################################
 // ############ SERVER ############
 // ################################
 // ################################
 
-void receive_file(woo200::ClientSocket client)
+int receive_file(woo200::ClientSocket &client)
 {
     woo200::FileHeader header(&client);
     const char* filename = header.get_filename();
-
     unsigned long size = header.get_size();
     printf("Receiving file %s (%lu bytes)\n", filename, size);
 
     FILE* fp = fopen(filename, "w");
     if (fp == NULL) {
         fprintf(stderr, "Failed to open file %s\n", filename);
-        exit(EXIT_FAILURE);
+        send_command(client, 'e'); // Error
+        return -1;
     }
+
+    send_command(client, 'r'); // Ready
 
     char buf[CHUNK_SIZE];
     int read_len;
@@ -29,7 +47,10 @@ void receive_file(woo200::ClientSocket client)
         size -= read_len;
     }
 
+    send_command(client, 'c'); // Complete
+
     fclose(fp);
+    return 1;
 }
 
 void start_receive(std::string address, int port)
@@ -46,27 +67,28 @@ void start_receive(std::string address, int port)
         exit(EXIT_FAILURE);
     }
     std::cout << "Listening on " << address << ":" << port << "\n";
-    woo200::ClientSocket client = sock.accept();
-    std::cout << "Accepted connection from " << inet_ntoa(client.get_addr().sin_addr) << "\n";
+    woo200::ClientSocket* client = sock.accept();
+    std::cout << "Accepted connection from " << inet_ntoa(client->get_addr().sin_addr) << "\n";
 
-    woo200::CommandPacket cmd;
+    char cmd;
     do {
-        if (client.recv((char*) &cmd, sizeof(cmd)) < 0) {
-            std::cout << "Connection Closed" << std::endl;
-            break;
-        }
-        switch (cmd.command) {
+        std::cout << "new loop" << std::endl;
+        cmd = recv_command(*client);
+
+        std::cout << "Received command: " << cmd << "\n";
+
+        switch (cmd) {
             case 'f':
-                receive_file(client);
+                receive_file(*client);
                 break;
             case 'd':
-                std::cout << "Done\n";
+                std::cout << "Client softly disconnected\n";
                 break;
             default:
-                fprintf(stderr, "Unknown command: %c\n", cmd.command);
+                fprintf(stderr, "Unknown command: %c\n", cmd);
                 break;
         }
-    } while (cmd.command != 'd');
+    } while (cmd != 'd');
 }
 
 int count(std::string str, char c)
@@ -109,7 +131,7 @@ std::string base_name(std::string path, int deepness = 0)
 // ################################
 // ################################
 
-int send_file(std::string file_path, woo200::ClientSocket sock, int deepness)
+int send_file(std::string file_path, woo200::ClientSocket &sock, int deepness)
 {
     FILE* fp = fopen(file_path.c_str(), "r");
     if (fp == NULL) 
@@ -121,14 +143,17 @@ int send_file(std::string file_path, woo200::ClientSocket sock, int deepness)
     fseek(fp, 0, SEEK_SET);
 
     // Tell server it's receiving a file
-    woo200::CommandPacket cmd = { 'f' };
-    sock.send((char*) &cmd, sizeof(cmd));
+    send_command(sock, 'f');
 
     // Send file header packet
     std::string basename = base_name(file_path, deepness);
     woo200::FileHeader header(basename.c_str(), file_len);
     woo200::PrefixedLengthByteArray data = header.to_byte_array();
     sock.send(data.data, data.length);
+
+    // Wait for server to be ready
+    char cmd = recv_command(sock);
+    std::cout << "Received command: " << cmd << "\n";
 
     // Send file data
     char buf[CHUNK_SIZE];
@@ -138,34 +163,36 @@ int send_file(std::string file_path, woo200::ClientSocket sock, int deepness)
     }
     fclose(fp);
 
+    // Wait for server to be done
+    cmd = recv_command(sock);
+    std::cout << "Received command: " << cmd << "\n";
+
     return 0;
 }
 
 void send_file(std::string address, int port, const char* filename)
 {
-    woo200::ClientSocket sock;
-    if (sock.connect(port, address.c_str()) < 0) {
+    woo200::ClientSocket* sock = new woo200::ClientSocket();
+    if (sock->connect(port, address.c_str()) < 0) {
         fprintf(stderr, "Failed to connect to %s:%d\n", address.c_str(), port);
-        sock.close();
+        sock->close();
         exit(EXIT_FAILURE);
     }
     printf("Connected to %s:%d\n", address.c_str(), port);
 
     // send single file
-    if (send_file(filename, sock, 0) < 0)
+    if (send_file(filename, *sock, 0) < 0)
         fprintf(stderr, "Failed to send file %s\n", filename);
     else
         fprintf(stderr, "Sent file %s\n", filename);
     
-    // Tell server we're done
-    woo200::CommandPacket cmd = { 'd' };
-    sock.send((char*) &cmd, sizeof(cmd));
+    send_command(*sock, 'd');
 
-    sock.close();
+    sock->close();
     fprintf(stderr, "Closed connection to %s:%d\n", address.c_str(), port);
 }
 
-int send_directory(std::string dir_path, woo200::ClientSocket sock, int deepness=1)
+int send_directory(std::string dir_path, woo200::ClientSocket &sock, int deepness=1)
 {
     struct dirent *entry = nullptr;
     DIR *dp = nullptr;
@@ -193,6 +220,12 @@ int send_directory(std::string dir_path, woo200::ClientSocket sock, int deepness
 
                 if (send_file(file_path, sock, deepness) < 0)
                     fprintf(stderr, "Failed to send file %s\n", file_path.c_str());
+                // if (sock.recv((char*) &cmd, sizeof(cmd)) < 0) {
+                //     fprintf(stderr, "Connection closed abruptly!");
+                //     exit(EXIT_FAILURE);
+                // }
+                // if (cmd.command != 'c')
+                //     fprintf(stderr, "Failed to receive complete command\n");
             }
         }
     }
@@ -202,22 +235,22 @@ int send_directory(std::string dir_path, woo200::ClientSocket sock, int deepness
 
 void send_recursive(std::string address, int port, const char* dir_path)
 {
-    woo200::ClientSocket sock;
-    if (sock.connect(port, address.c_str()) < 0) {
+    woo200::ClientSocket* sock = new woo200::ClientSocket();
+    if (sock->connect(port, address.c_str()) < 0) {
         fprintf(stderr, "Failed to connect to %s:%d\n", address.c_str(), port);
-        sock.close();
+        sock->close();
         exit(EXIT_FAILURE);
     }
     printf("Connected to %s:%d\n", address.c_str(), port);
 
     // send directory
-    send_directory(dir_path, sock);
+    send_directory(dir_path, *sock);
 
     // Tell server we're done
     woo200::CommandPacket cmd = { 'd' };
-    sock.send((char*) &cmd, sizeof(cmd));
+    sock->send((char*) &cmd, sizeof(cmd));
 
-    sock.close();
+    sock->close();
 }
 
 // ################################

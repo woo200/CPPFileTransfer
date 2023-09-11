@@ -58,15 +58,16 @@ namespace woo200
 
         return ::send(this->sock, msg, len, 0);
     }
-    int ClientSocket::recv(char* buf, int len)
+    int ClientSocket::recv(char* buf, int len, int flags)
     {
         if (!this->connected)
             return -1;
 
-        return ::recv(this->sock, buf, len, 0);
+        return ::recv(this->sock, buf, len, flags);
     }
     void ClientSocket::close()
     {
+        std::cout << "Closing socket\n";
         ::close(this->sock);
     }
 }

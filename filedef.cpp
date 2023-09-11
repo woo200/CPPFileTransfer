@@ -10,11 +10,11 @@ namespace woo200
     FileHeader::FileHeader(woo200::ClientSocket* sock)
     {
         unsigned short filename_len;
-        sock->recv((char*) &filename_len, sizeof(unsigned short));
+        sock->recv((char*) &filename_len, sizeof(unsigned short)), MSG_WAITALL;
         char* filename = new char[filename_len];
-        sock->recv(filename, filename_len);
+        sock->recv(filename, filename_len, MSG_WAITALL);
         unsigned long size;
-        sock->recv((char*) &size, sizeof(unsigned long));
+        sock->recv((char*) &size, sizeof(unsigned long), MSG_WAITALL);
 
         char* filename_with_null = new char[filename_len + 1];
         memcpy(filename_with_null, filename, filename_len);

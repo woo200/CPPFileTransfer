@@ -18,7 +18,7 @@ namespace woo200 {
         int bind(const char* address, int port);
         int bind(sockaddr_in* addr);
         int listen(int backlog);
-        ClientSocket accept();
+        ClientSocket* accept();
 
         void close();
     };

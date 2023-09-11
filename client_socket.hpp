@@ -23,7 +23,7 @@ namespace woo200 {
         int connect(int port, sockaddr_in* addr);
         int send(const char* msg, int len);
 
-        int recv(char* buf, int len);
+        int recv(char* buf, int len, int flags=0);
         void close();
     };
 }

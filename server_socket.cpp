@@ -35,12 +35,12 @@ namespace woo200
     {
         return ::listen(this->sock, backlog);
     }
-    ClientSocket ServerSocket::accept()
+    ClientSocket* ServerSocket::accept()
     {
         struct sockaddr_in client_addr;
         socklen_t client_addr_len = sizeof(client_addr);
         int client_sock = ::accept(this->sock, (struct sockaddr*) &client_addr, &client_addr_len);
-        ClientSocket client(client_sock, client_addr);
+        ClientSocket* client = new ClientSocket(client_sock, client_addr);
 
         return client;
     }
