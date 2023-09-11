@@ -76,15 +76,36 @@ std::string base_name(std::string path, int deepness = 0)
     return basename;
 }
 
+int send_file(std::string file_path, woo200::ClientSocket sock, int deepness)
+{
+    FILE* fp = fopen(file_path.c_str(), "r");
+    if (fp == NULL) 
+        return -1;
+    
+    // Get file length
+    fseek(fp, 0, SEEK_END);
+    unsigned long file_len = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    // Send file header packet
+    std::string basename = base_name(file_path, deepness);
+    woo200::FileHeader header(basename.c_str(), file_len);
+    woo200::PrefixedLengthByteArray data = header.to_byte_array();
+    sock.send(data.data, data.length);
+
+    // Send file data
+    char buf[CHUNK_SIZE];
+    int read_len;
+    while ((read_len = fread(buf, 1, CHUNK_SIZE, fp)) > 0) {
+        sock.send(buf, read_len);
+    }
+    fclose(fp);
+
+    return 0;
+}
+
 void send_file(std::string address, int port, const char* filename)
 {
-    // check if file exists
-    FILE* fp = fopen(filename, "r");
-    if (fp == NULL) {
-        fprintf(stderr, "File not found: %s\n", filename);
-        exit(EXIT_FAILURE);
-    }
-
     woo200::ClientSocket sock;
     if (sock.connect(port, address.c_str()) < 0) {
         fprintf(stderr, "Failed to connect to %s:%d\n", address.c_str(), port);
@@ -93,33 +114,11 @@ void send_file(std::string address, int port, const char* filename)
     }
     printf("Connected to %s:%d\n", address.c_str(), port);
 
-    fseek(fp, 0, SEEK_END);
-    unsigned long file_len = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
+    // send single file
+    if (send_file(filename, sock, 0) < 0)
+        fprintf(stderr, "Failed to send file %s\n", filename);
 
-    std::string basename = base_name(filename);
-    woo200::FileHeader header(basename.c_str(), file_len);
-    woo200::PrefixedLengthByteArray data = header.to_byte_array();
-    sock.send(data.data, data.length);
-
-    char buf[CHUNK_SIZE];
-    int read_len;
-    
-    std::chrono::milliseconds st = std::chrono::duration_cast<std::chrono::milliseconds >(
-        std::chrono::system_clock::now().time_since_epoch()
-    );
-
-    while ((read_len = fread(buf, 1, CHUNK_SIZE, fp)) > 0) {
-        sock.send(buf, read_len);
-    }
-    
-    std::chrono::milliseconds et = std::chrono::duration_cast<std::chrono::milliseconds >(
-        std::chrono::system_clock::now().time_since_epoch()
-    );
-
-    fclose(fp);
     sock.close();
-    printf("Sent file %s (%lu bytes) in %lums\n", filename, file_len, (unsigned long)(et - st).count());
 }
 
 // Print usage and exit
