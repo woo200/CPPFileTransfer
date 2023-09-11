@@ -8,4 +8,5 @@
 #include <chrono>
 #include <sstream>
 #include <dirent.h>
+#include <sys/stat.h>
 #include <errno.h>

@@ -18,6 +18,63 @@ char recv_command(woo200::ClientSocket &sock)
     return cmd.command;
 }
 
+int count(std::string str, char c)
+{
+    int count = 0;
+    for (char ch : str) {
+        if (ch == c)
+            count++;
+    }
+    return count;
+}
+
+std::string base_name(std::string path, int deepness = 0)
+{
+    bool has_ending_slash = path[path.length()-1] == '/';
+    if (!has_ending_slash)
+        path += "/";
+
+    int num_slashes = count(path, '/') - 1;
+    std::istringstream f(path);
+    std::string s, basename;
+    int i = 0;
+
+    while (getline(f, s, '/')) {
+        if (num_slashes-i <= deepness) {
+            basename += s + "/";
+        }
+        i++;
+    }
+
+    if (!has_ending_slash)
+        return basename.substr(0, basename.length()-1);
+
+    return basename;
+}
+
+void create_dirs(std::string file_path)
+{
+    bool last_file_is_dir = file_path[file_path.length()-1] == '/';
+    int num_slashes = count(file_path, '/');
+
+    std::istringstream f(file_path);
+    std::string s, dir_path;
+    struct stat info;
+
+    int i = 0;
+    while (getline(f, s, '/')) {
+        dir_path += s + "/";
+        if (num_slashes-i == 0) {
+            break;
+        }
+        i++;
+        if(stat( dir_path.c_str(), &info ) == 0)
+            continue;
+
+        mkdir(dir_path.c_str(), 0777);
+    }
+}
+
 // ################################
 // ################################
 // ############ SERVER ############
@@ -30,6 +87,8 @@ int receive_file(woo200::ClientSocket &client)
     const char* filename = header.get_filename();
     unsigned long size = header.get_size();
     printf("Receiving file %s (%lu bytes)\n", filename, size);
+
+    create_dirs(filename); // Create directories if they don't exist
 
     FILE* fp = fopen(filename, "w");
     if (fp == NULL) {
@@ -72,10 +131,7 @@ void start_receive(std::string address, int port)
 
     char cmd;
     do {
-        std::cout << "new loop" << std::endl;
         cmd = recv_command(*client);
-
-        std::cout << "Received command: " << cmd << "\n";
 
         switch (cmd) {
             case 'f':
@@ -89,41 +145,10 @@ void start_receive(std::string address, int port)
                 break;
         }
     } while (cmd != 'd');
+
+    client->close();
 }
 
-int count(std::string str, char c)
-{
-    int count = 0;
-    for (char ch : str) {
-        if (ch == c)
-            count++;
-    }
-    return count;
-}
-
-std::string base_name(std::string path, int deepness = 0)
-{
-    bool has_ending_slash = path[path.length()-1] == '/';
-    if (!has_ending_slash)
-        path += "/";
-
-    int num_slashes = count(path, '/') - 1;
-    std::istringstream f(path);
-    std::string s, basename;
-    int i = 0;
-
-    while (getline(f, s, '/')) {
-        if (num_slashes-i <= deepness) {
-            basename += s + "/";
-        }
-        i++;
-    }
-
-    if (!has_ending_slash)
-        return basename.substr(0, basename.length()-1);
-
-    return basename;
-}
 // ################################
 // ################################
 // ############ CLIENT ############
@@ -153,7 +178,10 @@ int send_file(std::string file_path, woo200::ClientSocket &sock, int deepness)
 
     // Wait for server to be ready
     char cmd = recv_command(sock);
-    std::cout << "Received command: " << cmd << "\n";
+    if (cmd != 'r') {
+        fprintf(stderr, "Server not ready to receive file\n");
+        return -1;
+    }
 
     // Send file data
     char buf[CHUNK_SIZE];
@@ -165,7 +193,6 @@ int send_file(std::string file_path, woo200::ClientSocket &sock, int deepness)
 
     // Wait for server to be done
     cmd = recv_command(sock);
-    std::cout << "Received command: " << cmd << "\n";
 
     return 0;
 }
@@ -213,10 +240,6 @@ int send_directory(std::string dir_path, woo200::ClientSocket &sock, int deepnes
                 std::string file_path = dir_path + "/" + file_name;
                 std::string name = base_name(file_path, deepness);
                 printf("Sending file %s (name: %s)\n", file_path.c_str(), name.c_str());
-                
-                // Tell server it's receiving a file
-                woo200::CommandPacket cmd = { 'f' };
-                sock.send((char*) &cmd, sizeof(cmd));
 
                 if (send_file(file_path, sock, deepness) < 0)
                     fprintf(stderr, "Failed to send file %s\n", file_path.c_str());

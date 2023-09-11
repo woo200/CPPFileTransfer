@@ -67,7 +67,6 @@ namespace woo200
     }
     void ClientSocket::close()
     {
-        std::cout << "Closing socket\n";
         ::close(this->sock);
     }
 }
